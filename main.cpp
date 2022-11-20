@@ -22,8 +22,15 @@ auto randomSingularXY = [](double a, double b) {
     return pair<double, double>(dis(mt_generator), dis(mt_generator));
 };
 
+auto normalDistSingularXY = [](double a, double b) {
+    normal_distribution<> dis(a, 0.1);
+    normal_distribution<> dis2(b, 0.1);
+
+    return pair<double, double>(dis(mt_generator), dis2(mt_generator));
+};
+
 auto randomVectorXY = [](pair<double, double> p, int a, int b) -> vector<pair<double, double>> {
-    uniform_real_distribution<> dis(a, b);
+    normal_distribution<> dis(a, b);
     return {pair<double, double>(dis(mt_generator), dis(mt_generator))};
 };
 
@@ -31,8 +38,6 @@ tuple<double,double,double> bruteForce (myfunction_t function, vector<double> do
 
     FILE *fp = NULL;
     fp = fopen("bruteforce.txt", "a");
-
-    int checkpoint = maxIterations / 25;
 
     auto currentPair = randomSingularXY(domain.at(0), domain.at(1));
     auto bestPair = currentPair;
@@ -43,13 +48,6 @@ tuple<double,double,double> bruteForce (myfunction_t function, vector<double> do
             bestPair = currentPair;
         }
         currentPair = randomSingularXY(domain.at(0), domain.at(1));
-
-        if (i % checkpoint == 0){
-            auto stop = std::chrono::high_resolution_clock::now();
-            double currentBest = function(bestPair);
-            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
-            fprintf(fp, "%d %f\n", (int)duration.count(), currentBest);
-        }
     }
     fclose(fp);
     return make_tuple(function(bestPair),bestPair.first, bestPair.second);
@@ -60,9 +58,7 @@ tuple<double,double,double> hillClimbing(myfunction_t function, vector<double> d
     FILE *fp = NULL;
     fp = fopen("climbing.txt", "a");
 
-    int checkpoint = maxIterations / 25;
-
-    pair<double,double> sk = randomSingularXY(domain.at(0), domain.at(1));
+    pair<double,double> sk = normalDistSingularXY(domain.at(0), domain.at(1));
 
 
     auto start = std::chrono::high_resolution_clock::now();
@@ -78,13 +74,6 @@ tuple<double,double,double> hillClimbing(myfunction_t function, vector<double> d
         );
         if (function(bestNeighbour) < function(sk))
             sk = bestNeighbour;
-
-        if (i % checkpoint == 0){
-            auto stop = std::chrono::high_resolution_clock::now();
-            double currentBest = function(sk);
-            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
-            fprintf(fp, "%d %f\n", (int)duration.count(), currentBest);
-        }
     }
 
     fclose(fp);
@@ -95,19 +84,17 @@ tuple<double,double,double> simulatedAnnealing (myfunction_t function, vector<do
     FILE *fp = NULL;
     fp = fopen("annealing.txt", "a");
 
-    int checkpoint = maxIterations / 25;
-
     vector<pair<double, double>> ArrayOfXY;
     uniform_real_distribution<double> rand01(0, 1);
-    double uk = rand01(mt_generator);
 
-    auto sk = randomSingularXY(domain.at(0), domain.at(1));
+    auto sk = normalDistSingularXY(domain.at(0), domain.at(1));
     ArrayOfXY.push_back(sk);
     auto prevSK = sk;
 
     auto start = std::chrono::high_resolution_clock::now();
     for (int i = 1; i < maxIterations - 1; i++) {
-        auto tk = randomSingularXY(domain.at(0), domain.at(1));
+        double uk = rand01(mt_generator);
+        pair<double, double> tk = normalDistSingularXY(tk.first, tk.second); // ----
         if (function(tk) <= function(sk)) {
             sk = tk;
             ArrayOfXY.push_back(sk);
@@ -121,13 +108,6 @@ tuple<double,double,double> simulatedAnnealing (myfunction_t function, vector<do
             }
         }
         prevSK = sk;
-        double temp = 1/log(i);
-        if (i % checkpoint == 0){
-            auto stop = std::chrono::high_resolution_clock::now();
-            double currentBest = function(sk);
-            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
-            fprintf(fp, "%d %f\n", (int)duration.count(), currentBest);
-        }
     }
     fclose(fp);
     return make_tuple(function(sk),sk.first, sk.second);
@@ -149,40 +129,44 @@ int main(int argc, char **argv){
     myFunctions["matyas"] = [](pair<double, double> xy) {
         return (0.26 * (pow(xy.first, 2) + pow(xy.second, 2)) - (0.48 * xy.first * xy.second));
     };
+    myFunctions["ackley"] = [](pair<double, double> xy) {
+        return ( -20 * exp(-0.2 * sqrt(0.5 * pow(xy.first,2) + pow(xy.second,2))) - exp(0.5 * (cos(2*M_1_PI*xy.first) + cos(2*M_1_PI*xy.second))) + exp(1) + 20 );
+    };
 
-   domain["beale"] = {-4.5,4.5};
-   domain["himmel"] = {-5,5};
-   domain["threeHumpCamel"] = {-5,5};
-   domain["matyas"] = {-10,10};
+    domain["beale"] = {-4.5,4.5};
+    domain["himmel"] = {-5,5};
+    domain["threeHumpCamel"] = {-5,5};
+    domain["matyas"] = {-10,10};
+    domain["ackley"] = {-5,5};
 
-   if( remove( "climbing.txt" ) != 0 )
-       cout << "Creating file\n";
-   if( remove( "annealing.txt" ) != 0 )
-       cout << "Creating file\n";
-   if( remove( "bruteforce.txt" ) != 0 )
-       cout << "Creating file\n";
+    if( remove( "climbing.txt" ) != 0 )
+        cout << "Creating file\n";
+    if( remove( "annealing.txt" ) != 0 )
+        cout << "Creating file\n";
+    if( remove( "bruteforce.txt" ) != 0 )
+        cout << "Creating file\n";
 
-   try {
-       vector<string> arguments(argv, argv + argc);
-       auto selectedFunction = arguments.at(1);
-           cout << "BruteForce: ";
-           cout << get<0>(bruteForce(myFunctions.at(selectedFunction), domain.at(selectedFunction), 100000)) << endl;
-           cout << "X: "<<get<1>(bruteForce(myFunctions.at(selectedFunction), domain.at(selectedFunction), 100000)) << endl;
-           cout << "Y: "<<get<2>(bruteForce(myFunctions.at(selectedFunction), domain.at(selectedFunction), 100000)) << endl;
-           cout << "HillClimbing: ";
-           cout << get<0>(hillClimbing(myFunctions.at(selectedFunction), domain.at(selectedFunction), 100000)) << endl;
-           cout << "X: "<<get<1>(hillClimbing(myFunctions.at(selectedFunction), domain.at(selectedFunction), 100000)) << endl;
-           cout << "Y: "<<get<2>(hillClimbing(myFunctions.at(selectedFunction), domain.at(selectedFunction), 100000)) << endl;
-           cout << "Simulated Annealing: ";
-           cout << get<0>(simulatedAnnealing(myFunctions.at(selectedFunction), domain.at(selectedFunction), 100000)) << endl;
-           cout << "X: "<<get<1>(simulatedAnnealing(myFunctions.at(selectedFunction), domain.at(selectedFunction), 100000)) << endl;
-           cout << "Y: "<<get<2>(simulatedAnnealing(myFunctions.at(selectedFunction), domain.at(selectedFunction), 100000)) << endl;
-   }
-   catch (std::out_of_range aor) {
-       cout << "Error, possible arguments:  ";
-       for (auto [k, v] : myFunctions) cout << k << ", ";
-       cout << endl;
-       return 1;
-   }
-   return 0;
+    try {
+        vector<string> arguments(argv, argv + argc);
+        auto selectedFunction = arguments.at(1);
+        cout << "BruteForce: ";
+        cout << get<0>(bruteForce(myFunctions.at(selectedFunction), domain.at(selectedFunction), 100000)) << endl;
+        cout << "X: "<<get<1>(bruteForce(myFunctions.at(selectedFunction), domain.at(selectedFunction), 100000)) << endl;
+        cout << "Y: "<<get<2>(bruteForce(myFunctions.at(selectedFunction), domain.at(selectedFunction), 100000)) << endl;
+        cout << "HillClimbing: ";
+        cout << get<0>(hillClimbing(myFunctions.at(selectedFunction), domain.at(selectedFunction), 100000)) << endl;
+        cout << "X: "<<get<1>(hillClimbing(myFunctions.at(selectedFunction), domain.at(selectedFunction), 100000)) << endl;
+        cout << "Y: "<<get<2>(hillClimbing(myFunctions.at(selectedFunction), domain.at(selectedFunction), 100000)) << endl;
+        cout << "Simulated Annealing: ";
+        cout << get<0>(simulatedAnnealing(myFunctions.at(selectedFunction), domain.at(selectedFunction), 100000)) << endl;
+        cout << "X: "<<get<1>(simulatedAnnealing(myFunctions.at(selectedFunction), domain.at(selectedFunction), 100000)) << endl;
+        cout << "Y: "<<get<2>(simulatedAnnealing(myFunctions.at(selectedFunction), domain.at(selectedFunction), 100000)) << endl;
+    }
+    catch (std::out_of_range aor) {
+        cout << "Error, possible arguments:  ";
+        for (auto [k, v] : myFunctions) cout << k << ", ";
+        cout << endl;
+        return 1;
+    }
+    return 0;
 }
