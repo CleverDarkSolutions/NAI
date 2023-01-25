@@ -13,6 +13,7 @@ using chromosome_t = std::vector<int>;
 using population_t = std::vector<chromosome_t>;
 using myTerm = std::function<bool(population_t a, vector<double> b, int iterCount, int iteration)>;
 
+// A random deviation function
 double findStandardDeviation(vector<double> numbers) {
     float sum = 0.0, sDeviation = 0.0, mean;
     int i;
@@ -20,6 +21,7 @@ double findStandardDeviation(vector<double> numbers) {
     for(i = 0; i < numbers.size(); i++) {
         sum += numbers.at(i);
     }
+    // Calculating mean
     mean = sum/numbers.size();
 
     for(i = 0; i < numbers.size(); ++i) {
@@ -29,6 +31,7 @@ double findStandardDeviation(vector<double> numbers) {
     return sqrt(sDeviation/numbers.size());
 }
 
+// Vector scaling function
 double scale(double number, double oldMax, double oldMin, double newMin, double newMax)
 {
     double OldRange = (oldMax - oldMin);
@@ -49,6 +52,7 @@ population_t populate(int popSize, int chromSize){
     return population;
 }
 
+// Simple statistics function
 vector<double> popStatistics(vector<double> fitness){
     double max = 0;
     double min = fitness.at(0);
@@ -125,7 +129,7 @@ auto genetic_algorithm = [](
         auto parents_indexes = selection(population_fit);
         decltype(population) new_population;
         for (int i = 0 ; i < parents_indexes.size(); i+=2) {
-            decltype(initial_population) offspring = {population[i],population[i+1]};
+            decltype(initial_population) offspring = {population[parents_indexes[i]],population[parents_indexes[i+1]]};
             if (uniform(mt_generator) < p_crossover) {
                 offspring = crossover(offspring);
             }
@@ -163,25 +167,40 @@ std::vector<double> fitness_function(population_t pop, myfunction_t function, ve
     }
     return result;
 }
+// Roulette selection
 std::vector<int> selection(std::vector<double> fitnesses) {
-    uniform_real_distribution<> randomNumb(0.0,1.0);
-    double R = randomNumb(mt_generator);
-    double S = 0;
-    double P = 0;
-    double lastP = 0;
-    for (double elem : fitnesses){
-        S += elem;
+    double sumF = 0;
+
+    for (double elem : fitnesses) {
+        sumF += elem;
     }
-    double p = 0;
+    double probabilitySum = 0;
+    vector<double> probabilityArray;
+
+    for(int i = 0; i < fitnesses.size(); i++){
+        double probability = fitnesses.at(i) / sumF;
+        probabilityArray.push_back(probability);
+        probabilitySum += probability;
+    }
+
+    uniform_real_distribution<> randomNumb(0.0,probabilitySum);
     std::vector<int> resVector;
-    for (int i = 0; i < fitnesses.size(); i++) {
-        p = fitnesses.at(i) / S;
-        P = lastP + p;
-        if(lastP <= R && lastP <= P){
-            resVector.push_back(i);
+
+    while (resVector.size() < fitnesses.size()){
+        double number = randomNumb(mt_generator);
+        for(int i = 0; i < probabilityArray.size()-1; i++){
+            if (number > probabilityArray.at(i) && number < probabilityArray.at(i+1)){
+                resVector.push_back(i);
+                if(resVector.size() >= fitnesses.size()){
+                    break;
+                }
+            }
+            if(resVector.size() >= fitnesses.size()){
+                break;
+            }
         }
-        lastP = P;
     }
+
     return resVector;
 }
 std::vector<chromosome_t > crossover_empty(std::vector<chromosome_t > parents) {
@@ -240,7 +259,7 @@ int main(int argc, char *argv[]){
         return iteration > iterCount;
     };
     termConditions["custom"] = [](auto a, auto b, int iterCount, int iteration) {
-        if (findStandardDeviation(b) <= 0.0001){
+        if (findStandardDeviation(b) <= 0.1){
             cout << "deviaton: "<< findStandardDeviation(b) << endl;
             return true;
         } else{
@@ -264,18 +283,25 @@ int main(int argc, char *argv[]){
         for (int i = 1; i < argc; i += 2) {
             if (i + 1 != argc) {
                 if (string(argv[i]) == "-p") {
+                    // population size arg
                     popSize = atoi(argv[i + 1]);
                 } else if (string(argv[i]) == "-i") {
+                    // iteration arg
                     iterCount = atoi(argv[i + 1]);
                 } else if (string(argv[i]) == "-c") {
+                    // chance of crossing
                     crossChance = atof(argv[i + 1]);
                 } else if (string(argv[i]) == "-m") {
+                    // chance of mutation
                     mutateChance = atof(argv[i + 1]);
                 } else if (string(argv[i]) == "-f") {
+                    // optimization function
                     selectedFunction = argv[i + 1];
                 } else if (string(argv[i]) == "-t") {
+                    // condition of termination
                     selectedTerm = argv[i + 1];
                 } else if (string(argv[i]) == "-s") {
+                    // switch - set to 1 to print output
                     toPrint = atoi(argv[i + 1]);
                 } else {
                     cout << "invalid argument: " << argv[i] << endl;
@@ -297,13 +323,13 @@ int main(int argc, char *argv[]){
                                        domain.at(selectedFunction),
                                        goal.at(selectedFunction),
                                        toPrint);
-   }
-   catch (std::out_of_range aor) {
-       cout << "Wrong arg. Choose from: ";
-       for (auto [k, v] : myFunctions) cout << k << ", ";
-       cout << endl;
-       return 1;
-   }
+    }
+    catch (std::out_of_range aor) {
+        cout << "Blad. Podaj poprawny argument. Dostepne to: ";
+        for (auto [k, v] : myFunctions) cout << k << ", ";
+        cout << endl;
+        return 1;
+    }
 
-   return 0;
+    return 0;
 }
